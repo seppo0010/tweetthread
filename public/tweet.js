@@ -10,7 +10,7 @@ var createTweet = function(card) {
     },
     body: JSON.stringify({
       from: JSON.parse(window.fromAccount.value),
-      tweets: card.desc.split(/\n\*{3}\n/g),
+      tweets: card.desc.split(/\n\s*\*{3,}\s*\n/g),
     }),
   })
 }

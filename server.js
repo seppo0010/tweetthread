@@ -61,8 +61,11 @@ app.post('/tweet', function(req, res) {
         data.push(chunk);
       }).on('end', function() {
         let body = Buffer.concat(data);
+        console.log(body.length, res.headers['content-type'])
+        const chunkSize = 1024 * 1024
         initUpload(body.length, res.headers['content-type'])
-          .then((mediaId) => appendUpload(mediaId, body))
+          .then((mediaId) => Promise.all([...Array(Math.ceil(body.length / chunkSize)).keys()].map((i) => appendUpload(mediaId, body.slice(i * chunkSize, (i + 1) * chunkSize), i))))
+          .then((medias) => medias[0])
           .then(finalizeUpload)
           .then(mediaId => {
             /*
@@ -76,7 +79,7 @@ app.post('/tweet', function(req, res) {
             resolve(mediaId)
           })
           .catch((err) => {
-	    console.error('Failed to get attachment');
+	    console.error('Failed to upload attachment: ' + url);
 	    reject(err)
 	  });
       });
@@ -84,19 +87,21 @@ app.post('/tweet', function(req, res) {
   })
 
   function initUpload(mediaSize, mediaType) {
-    return makePost('media/upload', {
+    const d = {
       command    : 'INIT',
       total_bytes: mediaSize,
       media_type : mediaType,
-    }).then(data => data.media_id_string);
+    }
+    if (mediaType === 'image/gif') d.media_category = 'tweet_gif'
+    return makePost('media/upload', d).then(data => data.media_id_string);
   }
 
-  function appendUpload(mediaId, mediaData) {
+  function appendUpload(mediaId, mediaData, index) {
     return makePost('media/upload', {
       command      : 'APPEND',
       media_id     : mediaId,
       media        : mediaData,
-      segment_index: 0
+      segment_index: index
   }).then(data => mediaId);
   }
 
@@ -107,7 +112,7 @@ app.post('/tweet', function(req, res) {
     }).then(data => mediaId);
   }
   
-  function makePost (endpoint, params) {
+  function makePost(endpoint, params) {
     return new Promise((resolve, reject) => {
       client.post(endpoint, params, (error, data, response) => {
         if (error) {
@@ -129,7 +134,7 @@ app.post('/tweet', function(req, res) {
       text = text.replace(/!\[.*?\]\(.*?\)/, '')
     }
     return Promise.all(attachments).then((media_ids) => {
-      return client.post('statuses/update', {status: text, in_reply_to_status_id: lastReply, media_ids: media_ids.join(',')}).then(function(tweet) {
+      return client.post('statuses/update', {status: text.trim(), in_reply_to_status_id: lastReply, media_ids: media_ids.join(',')}).then(function(tweet) {
         lastReply = tweet.id_str;
       })
     }).catch((err) => {
