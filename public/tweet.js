@@ -2,7 +2,25 @@
 
 var t = TrelloPowerUp.iframe();
 
+var tweetHasError = function(tweet) {
+  tweet = tweet.replace(/!\[.*?\]\(.*?\)/g, '').trim()
+  const len = window.twttr.txt.parseTweet(tweet).weightedLength
+  if (len > 280) {
+    return 'too long (' + len + ')'
+  }
+  return null;
+}
+
 var createTweet = function(card) {
+  const tweets = card.desc.split(/\n\s*\*{3,}\s*\n/g);
+  for (var i = 0; i < tweets.length; i++) {
+    const t = tweets[i];
+    const err = tweetHasError(t)
+    if (err) {
+      alert('"' + t + '" is ' + err)
+      return
+    }
+  }
   return fetch('/tweet', {
     method: 'POST',
     headers: {
@@ -10,7 +28,7 @@ var createTweet = function(card) {
     },
     body: JSON.stringify({
       from: JSON.parse(window.fromAccount.value),
-      tweets: card.desc.split(/\n\s*\*{3,}\s*\n/g),
+      tweets: tweets,
     }),
   })
 }
