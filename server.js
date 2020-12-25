@@ -4,6 +4,8 @@ const Twitter = require('twitter');
 const LoginWithTwitter = require('login-with-twitter')
 const express = require('express');
 const app = express();
+const animated = require('animated-gif-detector')
+
 
 const twitterLogin = new LoginWithTwitter({
   consumerKey: process.env.TWITTER_API_KEY,
@@ -63,7 +65,7 @@ app.post('/tweet', function(req, res) {
         let body = Buffer.concat(data);
         console.log(body.length, res.headers['content-type'])
         const chunkSize = 1024 * 1024
-        initUpload(body.length, res.headers['content-type'])
+        initUpload(body.length, res.headers['content-type'], body)
           .then((mediaId) => Promise.all([...Array(Math.ceil(body.length / chunkSize)).keys()].map((i) => appendUpload(mediaId, body.slice(i * chunkSize, (i + 1) * chunkSize), i))))
           .then((medias) => medias[0])
           .then(finalizeUpload)
@@ -86,13 +88,13 @@ app.post('/tweet', function(req, res) {
     });
   })
 
-  function initUpload(mediaSize, mediaType) {
+  function initUpload(mediaSize, mediaType, mediaData) {
     const d = {
       command    : 'INIT',
       total_bytes: mediaSize,
       media_type : mediaType,
     }
-    if (mediaType === 'image/gif') d.media_category = 'tweet_gif'
+    if (mediaType === 'image/gif' && animated(mediaData)) d.media_category = 'tweet_gif'
     return makePost('media/upload', d).then(data => data.media_id_string);
   }
 
@@ -116,6 +118,7 @@ app.post('/tweet', function(req, res) {
     return new Promise((resolve, reject) => {
       client.post(endpoint, params, (error, data, response) => {
         if (error) {
+          console.error(error);
           reject(error);
         } else {
           resolve(data);
